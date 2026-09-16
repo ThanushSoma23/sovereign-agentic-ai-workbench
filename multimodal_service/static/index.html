@@ -462,10 +462,10 @@
                 </table>
                 <div style="margin-top: 14px; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px solid var(--border-color); padding-top: 10px;">
                     <strong>Model Registry Mapping:</strong><br>
-                    • Reasoning $\rightarrow$ Qwen3 4B<br>
-                    • Coding $\rightarrow$ Qwen3-Coder 7B<br>
-                    • Vision $\rightarrow$ Gemma3 4B<br>
-                    • OCR $\rightarrow$ PaddleOCR v4
+                    • Reasoning &rarr; Qwen3 4B<br>
+                    • Coding &rarr; Qwen3-Coder 7B<br>
+                    • Vision &rarr; Gemma3 4B<br>
+                    • OCR &rarr; PaddleOCR v4
                 </div>
             </div>
 
@@ -512,27 +512,35 @@
         let selectedDocFile = null;
         let selectedDocMode = 'fast';
 
-        // Check Health
+        // Check Health with automatic fallback to proxy if cross-port fetch is blocked
         async function checkHealth() {
+            let infOk = false;
             try {
-                const r1 = await fetch(`${INFERENCE_API}/health`);
+                const r1 = await fetch(`${INFERENCE_API}/health`, { mode: 'cors' });
                 const d1 = await r1.json();
-                document.getElementById('txt-8001').innerText = d1.status === 'ok' ? 'ONLINE' : 'ERROR';
-                document.getElementById('dot-8001').className = d1.status === 'ok' ? 'dot green' : 'dot red';
+                infOk = (d1.status === 'ok');
             } catch (e) {
-                document.getElementById('txt-8001').innerText = 'OFFLINE';
-                document.getElementById('dot-8001').className = 'dot red';
+                // Fallback attempt via relative path or backend check
+                try {
+                    const r1 = await fetch('/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({model_id: 'qwen3:4b-instruct-2507-q4_K_M', messages: [{role: 'user', content: 'ping'}]}) });
+                    infOk = r1.ok;
+                } catch(e2) { infOk = false; }
             }
 
+            document.getElementById('txt-8001').innerText = infOk ? 'ONLINE' : 'OFFLINE';
+            document.getElementById('txt-8001').style.color = infOk ? '#22c55e' : '#ef4444';
+            document.getElementById('dot-8001').className = infOk ? 'dot green' : 'dot red';
+
+            let mmOk = false;
             try {
                 const r2 = await fetch('/health');
                 const d2 = await r2.json();
-                document.getElementById('txt-8002').innerText = d2.status === 'ok' ? 'ONLINE' : 'ERROR';
-                document.getElementById('dot-8002').className = d2.status === 'ok' ? 'dot green' : 'dot red';
-            } catch (e) {
-                document.getElementById('txt-8002').innerText = 'OFFLINE';
-                document.getElementById('dot-8002').className = 'dot red';
-            }
+                mmOk = (d2.status === 'ok');
+            } catch (e) { mmOk = false; }
+
+            document.getElementById('txt-8002').innerText = mmOk ? 'ONLINE' : 'OFFLINE';
+            document.getElementById('txt-8002').style.color = mmOk ? '#22c55e' : '#ef4444';
+            document.getElementById('dot-8002').className = mmOk ? 'dot green' : 'dot red';
         }
 
         function switchMainTab(t) {
@@ -573,11 +581,21 @@
                     config: { temperature: 0.2, max_tokens: 1024 }
                 };
 
-                const res = await fetch(`${INFERENCE_API}/generate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                // Try fetching INFERENCE_API first, fallback to proxy /generate
+                let res;
+                try {
+                    res = await fetch(`${INFERENCE_API}/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (corsErr) {
+                    res = await fetch('/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                }
 
                 const data = await res.json();
                 const latencySec = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -681,7 +699,7 @@
         }
 
         checkHealth();
-        setInterval(checkHealth, 10000);
+        setInterval(checkHealth, 5000);
     </script>
 </body>
 </html>

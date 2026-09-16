@@ -24,14 +24,25 @@ import time
 from typing import List, Dict, Any, Optional
 
 import httpx
-from fastapi import FastAPI, UploadFile, File, Query, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, UploadFile, File, Query, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from paddleocr import PaddleOCR
 
 INFERENCE_SERVICE_URL = "http://localhost:8001/generate"
+INFERENCE_HEALTH_URL = "http://localhost:8001/health"
 
 app = FastAPI(title="Sovereign Workbench - Multimodal API", version="0.1.0")
+
+# Enable CORS for browser access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Lazy singleton PaddleOCR engine
 ocr_engine = None
@@ -74,6 +85,18 @@ def read_root():
 @app.get("/health")
 def health():
     return {"status": "ok", "ocr_ready": ocr_engine is not None}
+
+
+@app.post("/generate")
+async def proxy_generate(request: Request):
+    """Proxy POST /generate to inference_service (port 8001) for robust single-origin UI fetch."""
+    body = await request.json()
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        try:
+            resp = await client.post(INFERENCE_SERVICE_URL, json=body)
+            return JSONResponse(content=resp.json(), status_code=resp.status_code)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Inference proxy error: {e}")
 
 
 def parse_json_from_llm(raw_text: str) -> Dict[str, Any]:

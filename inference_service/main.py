@@ -16,11 +16,21 @@ from typing import List, Optional, Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 app = FastAPI(title="Sovereign Workbench - Inference API", version="0.1.0")
+
+# Enable CORS for browser access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ---------- Contract schemas ----------
@@ -136,7 +146,6 @@ async def generate(req: GenerateRequest):
             "\n--- END RETRIEVED CONTEXT ---"
         )
 
-        # Check if system message already exists
         has_system = False
         for msg in ollama_messages:
             if msg["role"] == "system":
