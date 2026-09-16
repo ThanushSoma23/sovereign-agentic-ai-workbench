@@ -29,7 +29,7 @@
   - `"qwen3:4b-instruct-2507-q4_K_M"` (Reasoning/Fast instruct, `think=False` for ~5-15s CPU response)
   - `"qwen3:4b"` (Reasoning fallback)
   - `"gemma3:4b"` (Vision-Language model)
-- **Request Contract**:
+- **Standard Request Contract (Without Context)**:
   ```json
   {
     "model_id": "qwen3:4b-instruct-2507-q4_K_M",
@@ -37,7 +37,7 @@
     "config": {"temperature": 0.2, "max_tokens": 1024}
   }
   ```
-- **Response Contract**:
+- **Standard Response Contract**:
   ```json
   {
     "model_id": "qwen3:4b-instruct-2507-q4_K_M",
@@ -46,7 +46,61 @@
   }
   ```
 
-### B. Multimodal Service (`multimodal_service/main.py` — Port 8002)
+---
+
+## 3. RAG-Ready Intelligence Extension (Teammate Integration Interface)
+
+> [!NOTE]
+> **Team Boundary Note**:
+> Vector database storage, PDF ingestion, chunking, embeddings, and retrieval are handled by the **Local RAG Teammate**. Web search, internet retrieval, and user permissions are handled by the **External Retrieval Teammate**.
+> The **Intelligence Service (this module)** has **ZERO internet dependency** and communicates solely with local Ollama models (`http://localhost:11434`) on the air-gapped machine.
+
+### RAG-Grounded Request Contract (Optional `context`)
+To provide retrieved context from the Local RAG service, the Agent or RAG teammate passes the optional `context` object in `POST /generate`:
+
+```json
+{
+  "model_id": "qwen3:4b-instruct-2507-q4_K_M",
+  "messages": [
+    {"role": "user", "content": "What is the recommended cooling system pressure?"}
+  ],
+  "context": {
+    "source": "local_rag",
+    "documents": [
+      {
+        "document": "Sovereign_Node_Specs.pdf",
+        "page": 24,
+        "content": "Cooling System Specification: Operating pressure for Node A is strictly 101.3 kPa."
+      }
+    ]
+  }
+}
+```
+
+### RAG Response Contract with Source Attribution (`sources`)
+When `context` is provided, `inference_service` grounds the LLM prompt using strict instruction/content separation to prevent prompt injection, and returns document page attributions in `sources`:
+
+```json
+{
+  "model_id": "qwen3:4b-instruct-2507-q4_K_M",
+  "response": "Based on the retrieved specification document, the recommended cooling system pressure for Air-Gapped Workbench Node A is 101.3 kPa.",
+  "usage": {
+    "prompt_tokens": 142,
+    "completion_tokens": 32,
+    "latency_ms": 14850
+  },
+  "sources": [
+    {
+      "document": "Sovereign_Node_Specs.pdf",
+      "page": 24
+    }
+  ]
+}
+```
+
+---
+
+## 4. Multimodal Service (`multimodal_service/main.py` — Port 8002)
 - **Endpoint**: `POST /analyze?mode=fast` (or `mode=vlm`)
 - **Processing Modes**:
   - `mode=fast` (**Recommended for Live Demo on CPU**): Runs offline PaddleOCR to extract text lines + confidence, then calls `qwen3:4b-instruct` to extract clean structured JSON in **~5-15 seconds**.
@@ -73,7 +127,7 @@
 
 ---
 
-## 3. CPU Latency Optimization & Demo Recommendations
+## 5. CPU Latency Optimization & Demo Recommendations
 
 > [!TIP]
 > **Live Demo Strategy (2-Day Deadline, CPU Only)**:
@@ -83,7 +137,7 @@
 
 ---
 
-## 4. How to Run & Demo
+## 6. How to Run & Demo
 
 ### Terminal 1: Start Inference Service (Port 8001)
 ```powershell
@@ -97,23 +151,8 @@ cd c:\Users\somat\Desktop\SIH\multimodal_service
 ..\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8002
 ```
 
-### Terminal 3: Run Full Pipeline Verification
+### Terminal 3: Run Full RAG & Multimodal Pipeline Verification
 ```powershell
 cd c:\Users\somat\Desktop\SIH
-.\venv\Scripts\python.exe sample_data/verify_pipeline.py
+.\venv\Scripts\python.exe sample_data/verify_rag_extension.py
 ```
-
-### Demo CURL Commands
-
-1. **Test Inference API**:
-   ```bash
-   curl -X POST http://localhost:8001/generate \
-     -H "Content-Type: application/json" \
-     -d '{"model_id": "qwen3:4b-instruct-2507-q4_K_M", "messages": [{"role": "user", "content": "Reply in 3 words: system state?"}]}'
-   ```
-
-2. **Test Document OCR + Structuring**:
-   ```bash
-   curl -X POST "http://localhost:8002/analyze?mode=fast" \
-     -F "file=@sample_data/test_report.png"
-   ```
