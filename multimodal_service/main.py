@@ -25,6 +25,7 @@ from typing import List, Dict, Any, Optional
 
 import httpx
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from paddleocr import PaddleOCR
 
@@ -32,14 +33,12 @@ INFERENCE_SERVICE_URL = "http://localhost:8001/generate"
 
 app = FastAPI(title="Sovereign Workbench - Multimodal API", version="0.1.0")
 
-# Initialize PaddleOCR singleton instance
-# use_angle_cls=True helps auto-rotate skewed document scans
+# Lazy singleton PaddleOCR engine
 ocr_engine = None
 
 def get_ocr_engine():
     global ocr_engine
     if ocr_engine is None:
-        # Lazy load PaddleOCR on first request
         ocr_engine = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
     return ocr_engine
 
@@ -63,6 +62,15 @@ class AnalyzeResponse(BaseModel):
     mode_used: str
 
 
+@app.get("/", response_class=FileResponse)
+def read_root():
+    """Serves the Sovereign Multimodal Demo Dashboard UI."""
+    index_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse("<h1>Sovereign Multimodal Service Running (port 8002)</h1>")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "ocr_ready": ocr_engine is not None}
@@ -73,12 +81,10 @@ def parse_json_from_llm(raw_text: str) -> Dict[str, Any]:
     if not raw_text:
         return {}
     
-    # Try finding markdown ```json ... ``` block
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
     if match:
         json_str = match.group(1)
     else:
-        # Find first { and last }
         start = raw_text.find("{")
         end = raw_text.rfind("}")
         if start != -1 and end != -1 and end > start:
@@ -99,7 +105,6 @@ async def analyze(
 ):
     start_time = time.time()
     
-    # 1. Save uploaded file to temp file for PaddleOCR
     suffix = os.path.splitext(file.filename or "doc.png")[1]
     if not suffix:
         suffix = ".png"
@@ -110,7 +115,7 @@ async def analyze(
         tmp_path = tmp.name
 
     try:
-        # 2. Run PaddleOCR
+        # 1. Run PaddleOCR
         engine = get_ocr_engine()
         ocr_result = engine.ocr(tmp_path, cls=True)
 
@@ -129,17 +134,15 @@ async def analyze(
         ocr_text = "\n".join(full_text_list)
         avg_confidence = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
 
-        # Base64 image encoding if needed for VLM mode
         img_b64 = base64.b64encode(contents).decode("utf-8")
 
-        # 3. Call inference_service over HTTP
+        # 2. Call inference_service over HTTP
         structured_fields = {}
         vlm_raw_response = ""
         actual_mode = mode
 
         async with httpx.AsyncClient(timeout=180.0) as client:
             if mode == "vlm":
-                # VLM mode: send image to gemma3:4b
                 prompt = (
                     "Analyze this document image and extract all key data fields as a valid JSON object. "
                     "Keys should be normalized field names (e.g. document_type, date, status, total_amount, metadata). "
@@ -157,7 +160,6 @@ async def analyze(
                     "config": {"temperature": 0.1, "max_tokens": 1024}
                 }
             else:
-                # Fast mode: send extracted OCR text to qwen3:4b-instruct
                 prompt = (
                     f"Extract key structured fields from this OCR text into a JSON object.\n"
                     f"OCR Text:\n{ocr_text}\n\n"
