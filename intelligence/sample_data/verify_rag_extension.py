@@ -1,3 +1,5 @@
+import os
+import sys
 import time
 import json
 import httpx
@@ -5,8 +7,9 @@ import subprocess
 
 def test_multimodal_pipeline():
     print("\n--- 1. Running Multimodal & Inference Pipeline Verification ---")
+    script_path = os.path.join(os.path.dirname(__file__), "verify_pipeline.py")
     res = subprocess.run(
-        [r".\venv\Scripts\python.exe", "sample_data/verify_pipeline.py"],
+        [sys.executable, script_path],
         capture_output=True,
         text=True
     )

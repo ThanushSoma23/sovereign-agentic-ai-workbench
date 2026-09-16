@@ -31,4 +31,5 @@ def create_sample_document(output_path: str):
     print(f"Sample test document created at: {output_path}")
 
 if __name__ == "__main__":
-    create_sample_document("c:/Users/somat/Desktop/SIH/sample_data/test_report.png")
+    target_path = os.path.join(os.path.dirname(__file__), "test_report.png")
+    create_sample_document(target_path)

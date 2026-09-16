@@ -1,12 +1,12 @@
-# Progress Report — Inference (M2) & Multimodal (M4) Services
+# Progress Report — Intelligence Service (M2) & Multimodal Engine (M4)
 
 **Project**: SIH 2026 — Sovereign On-Premise Agentic AI Workbench  
 **Role**: LLM/Inference Engineer (M2) + Multimodal AI Engineer (M4)  
-**Status**: All services working, integrated, and verified end-to-end.
+**Status**: All services working, integrated, structured under `intelligence/`, and verified end-to-end.
 
 ---
 
-## 1. Executive Summary & Root Cause Fix
+## 1. Executive Summary & Setup Fixes
 
 - **PaddleOCR Setup Issue Fixed**:
   - **Diagnostic**: System default `python` is 3.14.6, which fails to find pre-built wheels for `paddlepaddle==2.6.2`.
@@ -15,15 +15,15 @@
   - Added missing dependency `python-multipart` required by FastAPI for multipart form file uploads (`UploadFile`).
 
 - **Services Status**:
-  - `inference_service` running on **port 8001** (FastAPI wrapping local Ollama server).
-  - `multimodal_service` running on **port 8002** (PaddleOCR + HTTP calls to `inference_service`).
+  - `intelligence/inference_service` running on **port 8001** (FastAPI wrapping local Ollama server).
+  - `intelligence/multimodal_service` running on **port 8002** (PaddleOCR + HTTP calls to `inference_service` + Chat-First UI Dashboard).
   - End-to-end vision-language pipeline verified: uploaded scanned document -> PaddleOCR text/lines -> structured JSON output via local Ollama models.
 
 ---
 
 ## 2. API Contracts & Architecture
 
-### A. Inference Service (`inference_service/main.py` — Port 8001)
+### A. Inference Service (`intelligence/inference_service/main.py` — Port 8001)
 - **Endpoint**: `POST /generate`
 - **Registered Models**:
   - `"qwen3:4b-instruct-2507-q4_K_M"` (Reasoning/Fast instruct, `think=False` for ~5-15s CPU response)
@@ -100,7 +100,7 @@ When `context` is provided, `inference_service` grounds the LLM prompt using str
 
 ---
 
-## 4. Multimodal Service (`multimodal_service/main.py` — Port 8002)
+## 4. Multimodal Service (`intelligence/multimodal_service/main.py` — Port 8002)
 - **Endpoint**: `POST /analyze?mode=fast` (or `mode=vlm`)
 - **Processing Modes**:
   - `mode=fast` (**Recommended for Live Demo on CPU**): Runs offline PaddleOCR to extract text lines + confidence, then calls `qwen3:4b-instruct` to extract clean structured JSON in **~5-15 seconds**.
@@ -141,18 +141,18 @@ When `context` is provided, `inference_service` grounds the LLM prompt using str
 
 ### Terminal 1: Start Inference Service (Port 8001)
 ```powershell
-cd c:\Users\somat\Desktop\SIH\inference_service
-..\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8001
+cd c:\Users\somat\Desktop\SIH\intelligence\inference_service
+..\..\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8001
 ```
 
 ### Terminal 2: Start Multimodal Service (Port 8002)
 ```powershell
-cd c:\Users\somat\Desktop\SIH\multimodal_service
-..\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8002
+cd c:\Users\somat\Desktop\SIH\intelligence\multimodal_service
+..\..\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8002
 ```
 
 ### Terminal 3: Run Full RAG & Multimodal Pipeline Verification
 ```powershell
 cd c:\Users\somat\Desktop\SIH
-.\venv\Scripts\python.exe sample_data/verify_rag_extension.py
+.\venv\Scripts\python.exe intelligence/sample_data/verify_rag_extension.py
 ```

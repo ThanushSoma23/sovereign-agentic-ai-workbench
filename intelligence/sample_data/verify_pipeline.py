@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import httpx
@@ -22,7 +23,7 @@ def test_inference_service():
 def test_multimodal_fast_mode():
     print("\n--- 2. Testing Multimodal Service - Fast CPU Mode (Port 8002) ---")
     url = "http://localhost:8002/analyze?mode=fast"
-    img_path = "sample_data/test_report.png"
+    img_path = os.path.join(os.path.dirname(__file__), "test_report.png")
     
     start = time.time()
     with open(img_path, "rb") as f:
@@ -48,7 +49,7 @@ def test_multimodal_fast_mode():
 def test_multimodal_vlm_mode():
     print("\n--- 3. Testing Multimodal Service - VLM Gemma3 Direct Mode (Port 8002) ---")
     url = "http://localhost:8002/analyze?mode=vlm"
-    img_path = "sample_data/test_report.png"
+    img_path = os.path.join(os.path.dirname(__file__), "test_report.png")
     
     start = time.time()
     with open(img_path, "rb") as f:
