@@ -9,6 +9,14 @@ export interface LocalModelInfo {
   engine: string;
 }
 
+export interface RagEvidenceItem {
+  text?: string;
+  content?: string;
+  source?: string;
+  page?: number | string;
+  score?: number;
+}
+
 export interface AgentExecutionState {
   question: string;
   route: AgentRoute;
@@ -23,6 +31,10 @@ export interface AgentExecutionState {
   retry_count: number;
   final_answer: string;
   elapsed_seconds?: number;
+  execution_history?: string[];
+  document_content?: string;
+  rag_query?: string;
+  rag_evidence?: RagEvidenceItem[];
 }
 
 export interface SystemStatus {
