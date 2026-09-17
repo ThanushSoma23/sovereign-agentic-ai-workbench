@@ -1,8 +1,6 @@
+.env
 venv/
 __pycache__/
 *.pyc
-*.log
-*.tmp
-sample_data/*.png
-sample_data/*.jpg
-.DS_Store
+chroma_db_new/
+.ipynb_checkpoints/
