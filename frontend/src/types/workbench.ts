@@ -43,3 +43,29 @@ export interface DeliverableFile {
   agentSource: string;
   content: string;
 }
+
+export interface SandboxTool {
+  name: string;
+  description: string;
+  requiredArgs: string[];
+  optionalArgs?: string[];
+}
+
+export interface SandboxExecutionResult {
+  status: 'success' | 'failed' | 'timeout' | 'blocked';
+  stdout?: string;
+  stderr?: string;
+  exit_code?: number;
+  execution_time?: number;
+  error?: string;
+  artifact_name?: string;
+}
+
+export interface SandboxState {
+  workspaceActive: boolean;
+  isolationMode: 'tempfs' | 'process_isolation';
+  timeoutSeconds: number;
+  zeroEgressPolicy: boolean;
+  registeredTools: string[];
+  recentExecutions: SandboxExecutionResult[];
+}

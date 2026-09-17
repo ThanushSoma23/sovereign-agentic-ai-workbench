@@ -4,10 +4,14 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-# Add 'agent' directory to Python path so sovereign_agent modules can be imported
+# Add 'agent' and 'sandbox' directories to Python path
 AGENT_DIR = Path(__file__).resolve().parent.parent / "agent"
 if str(AGENT_DIR) not in sys.path:
     sys.path.insert(0, str(AGENT_DIR))
+
+SANDBOX_DIR = Path(__file__).resolve().parent.parent / "sandbox"
+if str(SANDBOX_DIR) not in sys.path:
+    sys.path.insert(0, str(SANDBOX_DIR))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +36,10 @@ class AgentRequest(BaseModel):
     question: str
     document_context: Optional[str] = None
 
+class SandboxExecuteRequest(BaseModel):
+    code: str
+    timeout: Optional[int] = 5
+
 class AgentResponse(BaseModel):
     question: str
     route: str
@@ -51,8 +59,35 @@ def health_check():
         "air_gapped": True,
         "outbound_wan_bytes_per_sec": 0,
         "active_interface": "127.0.0.1 (Loopback)",
-        "inference_engine": "Local Sovereign Engine (LangGraph + Local Weights)"
+        "inference_engine": "Local Sovereign Engine (LangGraph + Local Weights)",
+        "sandbox_service": "M5 Isolated Subprocess Runner"
     }
+
+@app.get("/api/sandbox/tools")
+def list_sandbox_tools():
+    return {
+        "status": "active",
+        "tools": ["read_file", "write_file", "execute_code", "generate_artifact"],
+        "isolation": "tempfs_workspace",
+        "timeout_policy_seconds": 5
+    }
+
+@app.post("/api/sandbox/execute")
+def execute_sandbox_code(req: SandboxExecuteRequest):
+    try:
+        from sandbox import Sandbox
+        sb = Sandbox()
+        try:
+            res = sb.call_tool("execute_code", {"code": req.code, "timeout": req.timeout or 5})
+            return res
+        finally:
+            sb.cleanup()
+    except Exception as e:
+        return {
+            "status": "failed",
+            "error": str(e),
+            "exit_code": 1
+        }
 
 @app.get("/api/system-status")
 def system_status():

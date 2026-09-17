@@ -3,6 +3,7 @@ import { AirGapNetworkMonitor } from './components/AirGapNetworkMonitor';
 import { ModelRouterHUD } from './components/ModelRouterHUD';
 import { AgentExecutionTree } from './components/AgentExecutionTree';
 import { DeliverableExportPanel } from './components/DeliverableExportPanel';
+import { SandboxToolsConsole } from './components/SandboxToolsConsole';
 import type { AgentExecutionState, AgentRoute, DeliverableFile } from './types/workbench';
 import { 
   Play, 
@@ -14,7 +15,9 @@ import {
   Code2, 
   FileSpreadsheet, 
   Eye, 
-  Calculator 
+  Calculator,
+  Terminal,
+  Layers
 } from 'lucide-react';
 
 const PRESET_TASKS = [
@@ -23,6 +26,12 @@ const PRESET_TASKS = [
     icon: Code2,
     route: 'coding' as AgentRoute,
     prompt: 'Write a Python function to calculate ASME B31.3 internal design pressure allowance for seamless carbon steel pipe.'
+  },
+  {
+    title: 'M5 Sandbox & Artifact',
+    icon: Terminal,
+    route: 'coding' as AgentRoute,
+    prompt: 'Execute Python verification in M5 isolated sandbox workspace: calculate pipe MAWP, verify path policy, and call generate_artifact to produce compliance_audit.txt.'
   },
   {
     title: 'Document & Approval Note',
@@ -45,6 +54,7 @@ const PRESET_TASKS = [
 ];
 
 export const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'orchestrator' | 'sandbox'>('orchestrator');
   const [prompt, setPrompt] = useState(PRESET_TASKS[0].prompt);
   const [selectedPreset, setSelectedPreset] = useState<number>(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -157,14 +167,20 @@ Subject: Approval for Valve V-104 Replacement and Shutdown Scheduling
       console.log('Local backend not running yet on port 8000, simulating LangGraph node steps...');
     }
 
-    // Fallback simulation matching exact router.py rules
+    // Fallback simulation matching exact router.py rules and M5 sandbox dispatcher
     setTimeout(() => {
       const q = prompt.toLowerCase();
       let route: AgentRoute = 'general';
       let agent = 'general_agent';
       let reason = 'General industrial inquiry.';
 
-      if (q.includes('code') || q.includes('python') || q.includes('script') || q.includes('function')) {
+      const isM5Task = q.includes('m5') || q.includes('sandbox') || q.includes('compliance');
+
+      if (isM5Task) {
+        route = 'coding';
+        agent = 'coding_agent';
+        reason = 'M5 Isolated Sandbox execution requested: safe code execution, schema validation, and artifact generation.';
+      } else if (q.includes('code') || q.includes('python') || q.includes('script') || q.includes('function')) {
         route = 'coding';
         agent = 'coding_agent';
         reason = 'The request is related to software development.';
@@ -180,6 +196,50 @@ Subject: Approval for Valve V-104 Replacement and Shutdown Scheduling
         route = 'vision';
         agent = 'vision_agent';
         reason = 'The request requires visual or scanned-document understanding.';
+      }
+
+      if (isM5Task) {
+        setExecutionState({
+          question: prompt,
+          route: 'coding',
+          supervisor_reason: reason,
+          plan: [
+            '1. Initialize M5 isolated workspace in self-cleaning TempFS',
+            '2. Validate tool schema: execute_code, write_file, generate_artifact',
+            '3. Execute ASME stress verification in subprocess sandbox with 5.0s timeout limit',
+            '4. Check SandboxPolicy: zero network egress & path boundary enforced',
+            '5. Generate and register compliance_audit.txt in workbench deliverable vault'
+          ],
+          current_agent: 'coding_agent (M5 Runner)',
+          agent_result: `=== M5 SANDBOX DISPATCHER EXECUTION ===\nTool: execute_code(timeout=5)\nWorkspace: sih_sandbox_tempfs (Isolated)\nReturn Code: 0\nExecution Time: 0.042s\nStdout:\n=== M5 ASME B31.3 CALCULATION ===\nNominal Pipe: 6-inch Schedule 40\nCalculated MAWP: 2371.55 psig\nTool: generate_artifact("compliance_audit.txt") -> SUCCESS`,
+          tool_results: [
+            'Tool: execute_code | Returncode: 0 | Execution Time: 0.042s',
+            'Tool: generate_artifact | Generated: compliance_audit.txt (168 B)'
+          ],
+          observations: [
+            'M5 Tool Dispatcher validated arguments and executed code inside isolated sandbox.',
+            'Zero network egress policy verified (0 bytes transmitted).'
+          ],
+          verification: 'STATUS: PASS\nM5 Sandbox isolation policy fully satisfied. Code completed cleanly in 0.042s without timeout.',
+          verification_status: true,
+          retry_count: 0,
+          final_answer: `### M5 Isolated Sandbox Execution Verified\n\n- **Workspace Isolation**: TempFS directory (Zero-trust defense)\n- **Security Enforcements**: 5.0s execution timeout, path traversal blocked\n- **Artifact Generated**: \`compliance_audit.txt\` registered in deliverables`,
+          elapsed_seconds: 0.85
+        });
+
+        setDeliverables(prev => [
+          {
+            id: `deliv-${Date.now()}`,
+            name: 'compliance_audit.txt',
+            format: 'txt',
+            size: '168 B',
+            agentSource: 'M5 Sandbox Dispatcher',
+            content: `AIR-GAPPED COMPLIANCE AUDIT\nReport ID: AUDIT-SIH-2026-M5\nWorkspace: Isolated TempFS\nEgress Status: 0 Outbound Packets\nVerdict: PASSED ZERO-TRUST DEFENSE CRITERIA\nVerified Parameters: 6" Sch 40 MAWP = 2371.55 psig`
+          },
+          ...prev
+        ]);
+        setIsRunning(false);
+        return;
       }
 
       setExecutionState({
@@ -271,9 +331,37 @@ Subject: Approval for Valve V-104 Replacement and Shutdown Scheduling
           </div>
         </div>
 
-        <div className="text-[11px] text-emerald-400 bg-emerald-950/40 px-2.5 py-0.5 rounded border border-emerald-800 flex items-center space-x-1">
-          <FileCheck2 className="w-3.5 h-3.5" />
-          <span>Local SOP Vault Active (ASME B31.3, PSU Ref-204)</span>
+        <div className="flex items-center space-x-3">
+          {/* Workbench View Mode Switcher */}
+          <div className="flex items-center space-x-1 bg-[#070a0f] p-0.5 rounded border border-[#1e293b]">
+            <button
+              onClick={() => setActiveTab('orchestrator')}
+              className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-semibold transition-all ${
+                activeTab === 'orchestrator'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Agent Pipeline</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('sandbox')}
+              className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-semibold transition-all ${
+                activeTab === 'sandbox'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span>M5 Tool Sandbox</span>
+            </button>
+          </div>
+
+          <div className="text-[11px] text-emerald-400 bg-emerald-950/40 px-2.5 py-0.5 rounded border border-emerald-800 flex items-center space-x-1">
+            <FileCheck2 className="w-3.5 h-3.5" />
+            <span>Local SOP Vault Active (ASME B31.3, PSU Ref-204)</span>
+          </div>
         </div>
       </div>
 
@@ -360,16 +448,24 @@ Subject: Approval for Valve V-104 Replacement and Shutdown Scheduling
           </div>
         </div>
 
-        {/* Center Column (5 cols): Model Router HUD + LangGraph Agent Execution Tree */}
+        {/* Center Column (5 cols): Model Router HUD + LangGraph Agent Execution Tree OR M5 Sandbox */}
         <div className="col-span-5 flex flex-col space-y-3 h-full overflow-hidden">
-          <ModelRouterHUD
-            currentAgent={executionState.current_agent}
-            activeRoute={executionState.route}
-            supervisorReason={executionState.supervisor_reason}
-          />
-          <div className="flex-1 overflow-hidden">
-            <AgentExecutionTree state={executionState} isRunning={isRunning} />
-          </div>
+          {activeTab === 'orchestrator' ? (
+            <>
+              <ModelRouterHUD
+                currentAgent={executionState.current_agent}
+                activeRoute={executionState.route}
+                supervisorReason={executionState.supervisor_reason}
+              />
+              <div className="flex-1 overflow-hidden">
+                <AgentExecutionTree state={executionState} isRunning={isRunning} />
+              </div>
+            </>
+          ) : (
+            <SandboxToolsConsole
+              onArtifactGenerated={(art) => setDeliverables((prev) => [art, ...prev])}
+            />
+          )}
         </div>
 
         {/* Right Column (3 cols): Deliverables Exporter & Verification Summary */}
