@@ -44,9 +44,9 @@ print("STATUS: VERIFIED BY M5 ENGINE")
 `
   },
   {
-    name: 'Security Timeout Policy Test',
+    name: 'Security Timeout Guard',
     category: 'Security Audit',
-    code: `# M5 Security Enforcement: Infinite Loop Timeout Test
+    code: `# M5 Security Enforcement: Infinite Loop Timeout Guard
 print("Starting intensive loop inside M5 sandbox...")
 import time
 
@@ -59,7 +59,7 @@ print("Should not reach here if timeout policy is active")
 `
   },
   {
-    name: 'Artifact Generator Test',
+    name: 'Compliance Deliverable Generator',
     category: 'Deliverable Pipeline',
     code: `# M5 Artifact Generation & Verification
 report_content = """AIR-GAPPED COMPLIANCE AUDIT

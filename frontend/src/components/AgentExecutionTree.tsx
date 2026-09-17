@@ -31,7 +31,7 @@ export const AgentExecutionTree: React.FC<Props> = ({ state, isRunning }) => {
         </div>
         <h4 className="text-sm font-semibold text-slate-300">Agentic Execution Pipeline Idle</h4>
         <p className="text-xs text-slate-500 max-w-sm mt-1">
-          Submit a task from Dinesh's test suite (code execution, file read/write, or RAG) to observe the sovereign supervisor plan and verify the steps.
+          Submit an industrial task, inspection prompt, or engineering calculation to watch the sovereign supervisor plan and verify the steps.
         </p>
       </div>
     );
