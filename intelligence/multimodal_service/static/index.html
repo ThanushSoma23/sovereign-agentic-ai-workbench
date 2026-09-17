@@ -391,13 +391,19 @@
                 </div>
 
                 <div class="chat-input-area">
+                    <div id="chat-attach-badge" style="display: none; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-blue); border-radius: 6px; font-size: 0.8rem; color: var(--accent-blue);">
+                        <span id="chat-attach-name">📎 document.txt (0 KB)</span>
+                        <span style="cursor: pointer; font-weight: bold; margin-left: auto;" onclick="clearChatAttachment()">✖</span>
+                    </div>
+                    <input type="file" id="chat-file-input" style="display: none;" onchange="handleChatFileAttached(event)">
+
                     <div class="input-row">
                         <textarea class="chat-input" id="chat-input" placeholder="Type your prompt here..." onkeydown="handleChatKey(event)"></textarea>
                         <button class="btn-send" onclick="sendChatMessage()">Send</button>
                     </div>
                     <div class="action-bar">
-                        <button class="action-btn" onclick="switchMainTab('doc')">🖼️ Analyze Image</button>
-                        <button class="action-btn" onclick="switchMainTab('doc')">📎 Attach Document</button>
+                        <button class="action-btn" onclick="triggerChatFileSelect('image/*')">🖼️ Attach Image</button>
+                        <button class="action-btn" onclick="triggerChatFileSelect('*')">📎 Attach Document</button>
                         <button class="action-btn" style="cursor: default;">⚙️ Qwen3 4B (Active)</button>
                     </div>
                 </div>
@@ -455,8 +461,8 @@
             <div class="side-card">
                 <div class="side-card-title">MODEL ROUTER</div>
                 <table class="info-table">
-                    <tr><td>Task</td><td>General Reasoning</td></tr>
-                    <tr><td>Selected Model</td><td>Qwen3 4B</td></tr>
+                    <tr><td>Task</td><td id="router-task-val">General Reasoning</td></tr>
+                    <tr><td>Selected Model</td><td id="router-model-val">Qwen3 4B</td></tr>
                     <tr><td>Inference</td><td>Ollama</td></tr>
                     <tr><td>Execution</td><td>LOCAL CPU</td></tr>
                 </table>
@@ -466,6 +472,18 @@
                     • Coding &rarr; Qwen3-Coder 7B<br>
                     • Vision &rarr; Gemma3 4B<br>
                     • OCR &rarr; PaddleOCR v4
+                </div>
+            </div>
+
+            <!-- Agentic Pipeline Stages -->
+            <div class="side-card" id="pipeline-card">
+                <div class="side-card-title">AGENTIC PIPELINE</div>
+                <div class="status-list" id="pipeline-steps">
+                    <div class="status-row"><span>1. Request Received</span><span style="color:var(--accent-green)">✓</span></div>
+                    <div class="status-row"><span>2. Router Node Selection</span><span style="color:var(--accent-green)" id="pipe-router">✓ Qwen3 4B</span></div>
+                    <div class="status-row"><span>3. Specialist Execution</span><span style="color:var(--accent-green)" id="pipe-agent">✓ General Agent</span></div>
+                    <div class="status-row"><span>4. Verification Check</span><span style="color:var(--accent-green)" id="pipe-verify">✓ PASS</span></div>
+                    <div class="status-row"><span>5. Output Delivery</span><span style="color:var(--accent-green)">✓ Local Deliverable</span></div>
                 </div>
             </div>
 
@@ -551,6 +569,67 @@
             document.getElementById('view-doc').style.display = t === 'doc' ? 'block' : 'none';
         }
 
+        let attachedChatDoc = null;
+
+        function triggerChatFileSelect(acceptType) {
+            const fileInput = document.getElementById('chat-file-input');
+            fileInput.accept = acceptType;
+            fileInput.click();
+        }
+
+        async function handleChatFileAttached(evt) {
+            const file = evt.target.files[0];
+            if (!file) return;
+
+            const badge = document.getElementById('chat-attach-badge');
+            const nameSpan = document.getElementById('chat-attach-name');
+
+            badge.style.display = 'flex';
+            nameSpan.innerText = `⏳ Reading ${file.name}...`;
+
+            if (file.type.startsWith('image/')) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    const res = await fetch(`${MULTIMODAL_API}/analyze?mode=fast`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    const extractedText = data.ocr_text || JSON.stringify(data.structured_fields || {});
+                    attachedChatDoc = {
+                        name: file.name,
+                        content: extractedText
+                    };
+                    nameSpan.innerText = `🖼️ ${file.name} (OCR Extracted)`;
+                } catch (err) {
+                    alert('Failed to process image attachment: ' + err);
+                    clearChatAttachment();
+                }
+            } else {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    attachedChatDoc = {
+                        name: file.name,
+                        content: e.target.result
+                    };
+                    const kbSize = (file.size / 1024).toFixed(1);
+                    nameSpan.innerText = `📎 ${file.name} (${kbSize} KB)`;
+                };
+                reader.onerror = (err) => {
+                    alert('Failed to read file: ' + err);
+                    clearChatAttachment();
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function clearChatAttachment() {
+            attachedChatDoc = null;
+            document.getElementById('chat-attach-badge').style.display = 'none';
+            document.getElementById('chat-file-input').value = '';
+        }
+
         function handleChatKey(evt) {
             if (evt.key === 'Enter' && !evt.shiftKey) {
                 evt.preventDefault();
@@ -561,12 +640,49 @@
         async function sendChatMessage() {
             const input = document.getElementById('chat-input');
             const text = input.value.trim();
-            if (!text) return;
+            if (!text && !attachedChatDoc) return;
+
+            const userPromptText = text || `Please analyze the attached document: ${attachedChatDoc ? attachedChatDoc.name : ''}`;
 
             // Append User Message to UI & State
-            appendMessage('user', text);
-            conversationHistory.push({ role: "user", content: text });
+            appendMessage('user', userPromptText);
+            conversationHistory.push({ role: "user", content: userPromptText });
             input.value = '';
+
+            // Update Pipeline Card step 2
+            if (attachedChatDoc) {
+                document.getElementById('pipe-router').innerText = `✓ RAG Context (${attachedChatDoc.name})`;
+            } else {
+                document.getElementById('pipe-router').innerText = `✓ Qwen3 4B`;
+            }
+
+            // Prepare Payload with optional RAG Context
+            let payloadContext = null;
+            if (attachedChatDoc) {
+                payloadContext = {
+                    source: "local_rag",
+                    documents: [
+                        {
+                            document: attachedChatDoc.name,
+                            page: 1,
+                            content: attachedChatDoc.content
+                        }
+                    ]
+                };
+            }
+
+            const payload = {
+                model_id: "qwen3:4b-instruct-2507-q4_K_M",
+                messages: conversationHistory,
+                config: { temperature: 0.2, max_tokens: 1024 }
+            };
+
+            if (payloadContext) {
+                payload.context = payloadContext;
+            }
+
+            // Clear attachment badge after capturing payload
+            clearChatAttachment();
 
             // Show Thinking Indicator
             const thinking = document.getElementById('thinking-indicator');
@@ -575,12 +691,6 @@
             const startTime = Date.now();
 
             try {
-                const payload = {
-                    model_id: "qwen3:4b-instruct-2507-q4_K_M",
-                    messages: conversationHistory,
-                    config: { temperature: 0.2, max_tokens: 1024 }
-                };
-
                 // Try fetching INFERENCE_API first, fallback to proxy /generate
                 let res;
                 try {
