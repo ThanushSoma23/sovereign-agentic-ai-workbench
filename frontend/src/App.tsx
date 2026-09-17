@@ -150,6 +150,7 @@ Subject: Approval for Valve V-104 Replacement and Shutdown Scheduling
       if (response.ok) {
         const data = await response.json();
         setExecutionState(data);
+        setIsRunning(false);
         return;
       }
     } catch (err) {
